@@ -1,0 +1,38 @@
+/* Shared by both views. Wall display: dark only. Status colors are reserved
+   for state and always ship with a text label; team colors mark identity and
+   never color text. */
+:root {
+  color-scheme: dark;
+  --surface-0: #111110;
+  --surface-1: #1a1a19;
+  --surface-2: #262623;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8a897f;
+  --ink: #111110;
+  --critical: #d03b3b;
+  --warning: #fab219;
+  --good: #0ca30c;
+  --line-to-gain: #ffe14d;
+  --font-num: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-text: 'Barlow', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-family: var(--font-text);
+  overflow: hidden;
+}
+
+/* No data for a minute: everything on the board may be wrong, so say so. */
+body.feed-dead main { opacity: 0.4; }
+
+/* No motion on request (and in headless screenshots): end states only. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

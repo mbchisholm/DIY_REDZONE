@@ -1,0 +1,667 @@
+/* Field view. Sizing is all here: field.js only sets --n (lanes shown) and
+   --neff (full lanes + 0.56 x compact lanes). --wx is one design pixel at
+   1920 wide; --px is one design pixel of a 100px lane, so lane text scales
+   with lane height (capped by screen width). */
+:root {
+  --n: 1;
+  --neff: 1;
+  --wx: calc(100vw / 1920);
+  --gap: calc(var(--wx) * 8);
+  --tv: 0; /* the mock TV strip and its gap (?director=1); field.js TV_H */
+  --avail: calc(100vh - var(--wx) * (144 + var(--tv))); /* padding 20 + top 62 + rail 50 + gaps 12 */
+  --L: min(calc((var(--avail) - var(--gap) * (var(--n) - 1)) / var(--neff)), calc(var(--wx) * 300));
+  --Lc: calc(var(--L) * 0.56);
+  --px: min(calc(var(--L) / 100), calc(var(--wx) * 1.4));
+  --turf: #1b3022;
+}
+
+html, body { font-family: var(--font-num); }
+
+body {
+  display: grid;
+  grid-template-rows: calc(var(--wx) * 62) minmax(0, 1fr) calc(var(--wx) * 50);
+  row-gap: calc(var(--wx) * 6);
+  padding: calc(var(--wx) * 10) calc(var(--wx) * 14);
+}
+
+/* Shared columns: scoreboard | clock + state | field | end zone */
+.cols {
+  display: grid;
+  grid-template-columns:
+    calc(var(--px) * 330)
+    calc(var(--px) * 215)
+    minmax(0, 1fr)
+    calc(var(--px) * 168);
+}
+
+/* ---- top bar: brand, clock, and the axis for every lane ---- */
+
+.top { align-items: end; padding-bottom: calc(var(--wx) * 6); }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--wx) * 10);
+  align-self: center;
+  padding-left: calc(var(--wx) * 4);
+  font-weight: 800;
+  font-size: calc(var(--wx) * 30);
+  letter-spacing: 0.06em;
+}
+
+.brand .mark {
+  width: calc(var(--wx) * 14);
+  height: calc(var(--wx) * 30);
+  border-radius: 2px;
+  background: var(--critical);
+}
+
+.now {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--wx) * 12);
+  align-self: center;
+}
+
+.clock {
+  font-weight: 700;
+  font-size: calc(var(--wx) * 34);
+  font-variant-numeric: tabular-nums;
+}
+
+.feed {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--wx) * 6);
+  font-weight: 700;
+  font-size: calc(var(--wx) * 20);
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.feed::before {
+  content: '';
+  width: calc(var(--wx) * 10);
+  height: calc(var(--wx) * 10);
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.feed.ok::before { background: var(--good); }
+.feed.stale { color: var(--warning); }
+.feed.stale::before { background: var(--warning); }
+.feed.dead { color: #fff; background: var(--critical); padding: 0 0.4em; border-radius: 3px; }
+.feed.dead::before { background: #fff; }
+.feed.sim { color: var(--warning); }
+.feed.sim::before { background: var(--warning); border-radius: 2px; }
+
+.axis {
+  position: relative;
+  height: calc(var(--wx) * 40);
+  border-bottom: 2px solid #3a3a36;
+}
+
+.axis .tick {
+  position: absolute;
+  bottom: calc(var(--wx) * 2);
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: calc(var(--wx) * 28);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.axis .tick.mid { color: var(--text-secondary); }
+
+.axis .own {
+  position: absolute;
+  left: calc(var(--wx) * 4);
+  bottom: calc(var(--wx) * 6);
+  font-weight: 700;
+  font-size: calc(var(--wx) * 18);
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* The red zone's column label: the text that goes with every red segment below. */
+.axis .rzhead {
+  position: absolute;
+  left: 80%;
+  right: 0;
+  top: 0;
+  height: calc(var(--wx) * 30);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px 3px 0 0;
+  background: var(--critical);
+  color: #fff;
+  font-weight: 800;
+  font-size: calc(var(--wx) * 22);
+  letter-spacing: 0.12em;
+}
+
+.axis-ez {
+  align-self: end;
+  padding: 0 0 calc(var(--wx) * 8) calc(var(--wx) * 14);
+  font-weight: 700;
+  font-size: calc(var(--wx) * 18);
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* ---- lanes ---- */
+
+.board {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.empty {
+  margin: auto;
+  font-size: calc(var(--wx) * 36);
+  color: var(--text-muted);
+}
+
+.lane {
+  position: relative;
+  flex: none;
+  height: var(--L);
+  background: var(--surface-1);
+  border-radius: calc(var(--px) * 8);
+  overflow: hidden;
+}
+
+.lane { grid-template-rows: minmax(0, 1fr) auto; }
+.lane > * { grid-row: 1 / -1; min-width: 0; }
+.lane > .teams { grid-column: 1; }
+.lane > .when { grid-column: 2; }
+.lane > .field { grid-column: 3; grid-row: 1; }
+.lane > .lastplay { grid-column: 3; grid-row: 2; }
+.lane > .ez { grid-column: 4; }
+.lane > .flash { grid-column: 3 / 5; }
+
+/* Tall lanes (four games or fewer): the last play under the field. */
+.lastplay { display: none; }
+.board.tall .lane:not(.compact) .lastplay {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: 2.5em;
+  margin: calc(var(--px) * 10) calc(var(--px) * 18);
+  font-family: var(--font-text);
+  font-weight: 500;
+  font-size: calc(var(--px) * 24);
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+.lane.is-break .lastplay { opacity: 0.6; }
+.board.tall .teams { grid-template-rows: auto auto; align-content: center; row-gap: calc(var(--px) * 10); }
+
+.lane.compact { height: var(--Lc); background: #161615; }
+
+/* scoreboard */
+
+.teams {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  padding: calc(var(--px) * 3) calc(var(--px) * 14) calc(var(--px) * 3) 0;
+}
+
+.team {
+  display: grid;
+  grid-template-columns: calc(var(--px) * 7) calc(var(--px) * 40) auto auto auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: calc(var(--px) * 9);
+  min-height: 0;
+}
+
+.team .tbar { height: 80%; background: var(--team); border-radius: 0 2px 2px 0; }
+.team .logo { width: calc(var(--px) * 40); height: calc(var(--px) * 40); object-fit: contain; }
+
+.team .abbr {
+  min-width: 2.15em; /* fits WSH */
+  font-weight: 700;
+  font-size: calc(var(--px) * 42);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+/* the football: whoever has the ball */
+.team .poss {
+  position: relative;
+  width: calc(var(--px) * 22);
+  height: calc(var(--px) * 14);
+  border-radius: 50%;
+  background: #e9dfd0;
+  visibility: hidden;
+}
+
+.team .poss::after {
+  content: '';
+  position: absolute;
+  left: 30%;
+  right: 30%;
+  top: 50%;
+  height: 1.5px;
+  background: #5a3b22;
+  transform: translateY(-50%);
+}
+
+.team.has-ball .poss { visibility: visible; }
+
+.team .tos { display: flex; gap: calc(var(--px) * 4); }
+.team .tos i { width: calc(var(--px) * 10); height: calc(var(--px) * 5); border-radius: 1px; background: var(--text-secondary); }
+.team .tos i.used { background: var(--surface-2); }
+
+.team .score {
+  justify-self: end;
+  min-width: 1.25em;
+  padding: 0 0.12em;
+  border-radius: 0.1em;
+  text-align: right;
+  font-weight: 700;
+  font-size: calc(var(--px) * 47);
+  line-height: 1.02;
+  font-variant-numeric: tabular-nums;
+}
+
+.team .score.is-record { font-size: calc(var(--px) * 26); font-weight: 600; color: var(--text-muted); }
+
+/* Scored in the last 5 minutes: same window as the end-zone cell. A team-
+   colored bar under the number, so light team colors never cost contrast. */
+.team.scored .score {
+  background: color-mix(in srgb, var(--team) 22%, transparent);
+  box-shadow: inset 0 calc(var(--px) * -6) 0 var(--team);
+}
+
+.lane.is-post .team.loser { opacity: 0.45; }
+
+/* clock + state */
+
+.when {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--px) * 6);
+  padding-right: calc(var(--px) * 14);
+}
+
+.clk { display: flex; align-items: baseline; gap: calc(var(--px) * 8); white-space: nowrap; }
+.clk .per { font-weight: 600; font-size: calc(var(--px) * 30); color: var(--text-secondary); }
+.clk .per:empty { display: none; }
+.clk .time { font-weight: 700; font-size: calc(var(--px) * 46); line-height: 1; font-variant-numeric: tabular-nums; }
+
+.sub { display: flex; align-items: center; gap: calc(var(--px) * 12); min-height: calc(var(--px) * 36); }
+/* The network is filler for the chip row: shown only when there's no chip. */
+.chip.brk + .net, .chip.back + .net, .chip.watch + .net, .chip.to + .net { display: none; }
+.net { font-weight: 600; font-size: calc(var(--px) * 22); letter-spacing: 0.08em; color: var(--text-muted); white-space: nowrap; }
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  padding: calc(var(--px) * 2) calc(var(--px) * 10);
+  border-radius: calc(var(--px) * 4);
+  font-size: calc(var(--px) * 27);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.chip b { font-weight: 800; }
+.chip .el { font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip .el:empty { display: none; }
+.chip:not(.brk):not(.back):not(.watch):not(.to) { display: none; }
+.chip.rz { background: var(--critical); color: #fff; }
+.chip.brk { background: #3a3a36; color: var(--text-primary); }
+.chip.to { background: var(--surface-2); color: var(--text-secondary); }
+.chip.back { background: var(--good); color: #111110; }
+.chip.watch { box-shadow: inset 0 0 0 2px var(--warning); color: var(--warning); }
+
+/* the shared field: offense always drives left -> right, goal line on the right */
+
+.field {
+  position: relative;
+  z-index: 1;
+  background:
+    repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), rgba(255, 255, 255, 0.14) calc(10% - 1px) 10%),
+    var(--turf);
+  /* let a ball on the goal line or own 1 hang over the neighbouring cells */
+  clip-path: inset(0 calc(var(--px) * -40) 0 calc(var(--px) * -40));
+}
+
+.field .rz {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 80%;
+  right: 0;
+  background: rgba(208, 59, 59, 0.13);
+  box-shadow: inset 2px 0 0 rgba(208, 59, 59, 0.75);
+}
+
+.lane.is-rz .field .rz { background: rgba(208, 59, 59, 0.42); }
+.lane.rz-enter .field .rz { animation: rz-pulse 0.6s ease-in-out 8 alternate; }
+
+@keyframes rz-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+
+.field .fifty {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: transform 0.9s ease-out, opacity 0.3s;
+}
+
+.field.has-ball .mark { opacity: 1; }
+.field.jump .layer { transition: none; }
+.field:not(.has-ball) .trail, .field:not(.has-ball) .ltg { opacity: 0 !important; }
+
+.trail { transform-origin: 0 50%; }
+.trail i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: calc(var(--px) * 16);
+  transform: translateY(-50%);
+  background: var(--off);
+  opacity: 0.85;
+}
+
+.ltg i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--px) * 4);
+  transform: translateX(-50%);
+  background: var(--line-to-gain);
+}
+
+.mark .los {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--px) * 3);
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* The ball is the offense: its logo on the line of scrimmage. */
+.mark .ball {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: calc(var(--px) * 66);
+  height: calc(var(--px) * 66);
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-0);
+  box-shadow: 0 0 0 calc(var(--px) * 4) var(--off), 0 0 0 calc(var(--px) * 6) var(--surface-0);
+}
+
+.mark .ball img { width: 74%; height: 74%; object-fit: contain; }
+
+.mark .dd {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--px) * 44);
+  transform: translateY(-50%);
+  padding: calc(var(--px) * 1) calc(var(--px) * 10);
+  border-radius: calc(var(--px) * 5);
+  background: rgba(17, 17, 16, 0.92);
+  font-weight: 700;
+  font-size: calc(var(--px) * 40);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.mark .dd:empty { display: none; }
+.mark .dd.ahead { right: auto; left: calc(var(--px) * 44); }
+
+.hatch {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: repeating-linear-gradient(135deg, rgba(17, 17, 16, 0.55) 0 calc(var(--px) * 12), transparent calc(var(--px) * 12) calc(var(--px) * 24));
+}
+
+.note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-left: calc(var(--px) * 24);
+  font-weight: 700;
+  font-size: calc(var(--px) * 32);
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+/* Commercial: the lane goes quiet but keeps its ball, so you can see where
+   the game picks up. */
+.plays { position: absolute; inset: 0; }
+.lane.is-break .plays { opacity: 0.45; }
+.lane.is-break .hatch { display: block; }
+.lane.is-break .teams { opacity: 0.7; }
+
+/* pregame, halftime and final lanes: one row, no ball */
+
+.lane.compact .teams {
+  grid-template-rows: 1fr;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  column-gap: calc(var(--px) * 18);
+}
+
+.lane.compact .team { grid-template-columns: calc(var(--px) * 34) auto auto; column-gap: calc(var(--px) * 8); }
+.lane.compact .team .tbar { display: none; }
+.lane.compact .team .logo { width: calc(var(--px) * 34); height: calc(var(--px) * 34); }
+.lane.compact .team .abbr { font-size: calc(var(--px) * 36); min-width: 0; padding-left: calc(var(--px) * 4); }
+.lane.compact .team .score { font-size: calc(var(--px) * 38); justify-self: start; text-align: left; min-width: 0; margin-left: calc(var(--px) * 4); }
+.lane.compact .team .score.is-record { font-size: calc(var(--px) * 24); white-space: nowrap; }
+.lane.compact .sub { display: none; }
+.lane.compact .team .poss, .lane.compact .team .tos { display: none; }
+.lane.compact .clk .time { font-size: calc(var(--px) * 38); }
+.lane.compact .field { background: transparent; }
+.lane.compact .field .rz, .lane.compact .field .fifty { display: none; }
+.lane.compact .note { font-size: calc(var(--px) * 28); color: var(--text-muted); }
+.lane.compact .hatch { display: none; }
+
+/* the break countdown sits on the hatched field, legible over the dimmed ball */
+.lane.is-break:not(.compact) .note { justify-content: center; padding: 0; color: var(--text-primary); }
+.lane.is-break:not(.compact) .note span:not(:empty) {
+  padding: calc(var(--px) * 2) calc(var(--px) * 16);
+  border-radius: calc(var(--px) * 5);
+  background: rgba(17, 17, 16, 0.88);
+}
+.lane.is-half .note { color: var(--text-secondary); }
+.lane.is-post .clk .time { color: var(--text-secondary); }
+
+/* end zone: the latest score or turnover, for 5 minutes */
+
+.ez {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--px) * 2);
+  background: #20201e;
+  box-shadow: inset calc(var(--px) * 4) 0 0 rgba(255, 255, 255, 0.55); /* goal line */
+}
+
+.lane.compact .ez:not(.on) { background: transparent; box-shadow: none; }
+
+.ez.on { background: var(--ev-bg); color: var(--ev-fg); box-shadow: none; }
+.ez.on.old { opacity: 0.55; }
+.ez-label { font-weight: 800; font-size: calc(var(--px) * 46); line-height: 0.95; letter-spacing: 0.03em; }
+.ez-sub { font-weight: 700; font-size: calc(var(--px) * 22); letter-spacing: 0.06em; white-space: nowrap; }
+.lane.compact .ez-label { font-size: calc(var(--px) * 32); }
+.lane.compact .ez-sub { font-size: calc(var(--px) * 18); }
+
+/* flash: over field + end zone, in the scorer's color */
+
+.flash {
+  position: relative;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  gap: calc(var(--px) * 22);
+  padding: 0 calc(var(--px) * 24);
+  background: var(--flash-bg);
+  color: var(--flash-fg);
+  overflow: hidden;
+}
+
+.flash.on { display: flex; animation: flash-in 0.4s ease-out; }
+.flash.on .f-label { animation: flash-blink 0.5s ease-in-out 0.4s 6 alternate; }
+
+.f-label { flex: none; font-weight: 800; font-size: calc(var(--px) * 62); letter-spacing: 0.03em; line-height: 1; }
+.f-team { flex: none; font-weight: 700; font-size: calc(var(--px) * 38); letter-spacing: 0.04em; }
+.f-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-text);
+  font-weight: 500;
+  font-size: calc(var(--px) * 22);
+  line-height: 1.25;
+  opacity: 0.9;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes flash-in {
+  from { opacity: 0; transform: translateX(-3%); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes flash-blink {
+  from { opacity: 1; }
+  to { opacity: 0.25; }
+}
+
+/* ---- rail: finals and later games ---- */
+
+.rail {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--wx) * 22);
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: calc(var(--wx) * 26);
+  color: var(--text-secondary);
+}
+
+.rail .rl { font-weight: 700; font-size: calc(var(--wx) * 18); letter-spacing: 0.1em; color: var(--text-muted); }
+.rail .ri { display: inline-flex; gap: calc(var(--wx) * 8); align-items: baseline; }
+.rail .ri b { color: var(--text-primary); font-weight: 700; }
+.rail .ri i { font-style: normal; color: var(--text-muted); font-size: calc(var(--wx) * 19); letter-spacing: 0.06em; text-transform: uppercase; }
+.rail .ri .lose { color: var(--text-muted); }
+
+/* ---- mock TV strip (?director=1): what the director would put on the TV ---- */
+
+:root.with-tv { --tv: 156; }
+:root.with-tv body { grid-template-rows: calc(var(--wx) * 62) minmax(0, 1fr) calc(var(--wx) * 150) calc(var(--wx) * 50); }
+
+/* A game the TV would be showing: outlined in white. */
+.lane.on-tv { box-shadow: inset 0 0 0 calc(var(--wx) * 3) var(--text-primary); }
+
+.tv {
+  display: grid;
+  grid-template-columns: calc(var(--wx) * 190) calc(var(--wx) * 236) minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: calc(var(--wx) * 22);
+  padding: calc(var(--wx) * 10) calc(var(--wx) * 18);
+  border-radius: calc(var(--wx) * 8);
+  background: var(--surface-1);
+  transition: background 0.4s;
+}
+
+/* Just switched: change the channel. */
+.tv.cue { background: #33331f; box-shadow: inset 0 0 0 calc(var(--wx) * 3) var(--line-to-gain); }
+
+.tv-head { display: flex; flex-direction: column; gap: calc(var(--wx) * 2); }
+.tv-tag { font-weight: 700; font-size: calc(var(--wx) * 18); letter-spacing: 0.12em; color: var(--text-muted); }
+.tv-layout { font-weight: 800; font-size: calc(var(--wx) * 48); line-height: 1; letter-spacing: 0.04em; }
+.tv-held { font-weight: 600; font-size: calc(var(--wx) * 22); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* A 16:9 sketch of the screen, one slot per game. */
+.tv-screen {
+  display: grid;
+  gap: calc(var(--wx) * 3);
+  height: calc(var(--wx) * 130);
+  aspect-ratio: 16 / 9;
+  padding: calc(var(--wx) * 3);
+  border-radius: calc(var(--wx) * 4);
+  background: #000;
+}
+.tv-screen[data-n="2"] { grid-template-columns: 1fr 1fr; }
+.tv-screen[data-n="4"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  border-radius: 2px;
+  background: var(--turf);
+  font-weight: 700;
+  line-height: 1.05;
+  font-size: calc(var(--wx) * 30);
+}
+.tv-screen[data-n="2"] .slot { font-size: calc(var(--wx) * 24); }
+.tv-screen[data-n="4"] .slot { font-size: calc(var(--wx) * 18); }
+.slot span { white-space: nowrap; box-shadow: inset 0 calc(var(--wx) * -3) 0 var(--team); }
+.slot span.has-ball::after { content: ' ●'; color: var(--text-secondary); }
+.slot.rz { box-shadow: inset 0 0 0 calc(var(--wx) * 3) var(--critical); }
+.slot.brk { background: repeating-linear-gradient(135deg, #2a2a27 0 6px, #1f1f1d 6px 12px); color: var(--text-muted); }
+.slot.empty { background: #111; }
+
+.tv-why {
+  margin: 0;
+  font-weight: 700;
+  font-size: calc(var(--wx) * 28);
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tv-log {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--wx) * 3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-text);
+  font-size: calc(var(--wx) * 18);
+  color: var(--text-muted);
+}
+.tv-log li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-log b { margin-right: 0.6em; font-weight: 600; color: var(--text-secondary); }

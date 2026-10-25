@@ -1,0 +1,466 @@
+/* Grid view (?view=grid), the fallback to the field.
+
+   Type budget: at 10 ft on a 21.5" 1080p panel one arc-minute is ~3.6 px, so
+   20/20 acuity is a ~18 px cap height and comfortable glance reading needs
+   roughly twice that. Nothing on a live tile that matters is set smaller than
+   ~1.5u (about 30 px at nine tiles); anything that couldn't make that size
+   was cut. */
+:root {
+  --gap: 0.8vh;
+  --turf: #1d3524;
+}
+
+body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--gap);
+  padding: var(--gap);
+}
+
+/* ---- grid ---- */
+
+.grid {
+  display: grid;
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.empty {
+  place-self: center;
+  font-family: var(--font-num);
+  font-size: 5vh;
+  color: var(--text-muted);
+}
+
+.tile {
+  position: relative;
+  container-type: size;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-1);
+  border-radius: 0.8vh;
+  overflow: hidden;
+}
+
+/* The tile's type unit u: 20 px on a nine-game 1080p grid. One explicit
+   column, so the flash overlaps rows 3-4 instead of pushing them aside. */
+.tile > * { font-size: min(3.2cqw, 6cqh); grid-column: 1; }
+
+.tile {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---- band: state label + clock. The tile's peripheral signal. ---- */
+
+.band {
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  height: 2.5em;
+  padding: 0 0.8em 0 0.8em;
+  background: var(--surface-2);
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+
+.band .state {
+  font-weight: 800;
+  font-size: 1.7em;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.band .state:empty { display: none; }
+
+.band .tag {
+  font-weight: 700;
+  font-size: 1.45em;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.band .clock {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4em;
+  align-items: baseline;
+  font-size: 1.75em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.band .per { color: var(--text-secondary); font-weight: 600; }
+.band .per:empty { display: none; }
+
+/* red zone: the only full-color band */
+.band.k-rz { background: var(--critical); }
+.band.k-rz .tag, .band.k-rz .per { color: #fff; }
+
+/* warning-level states: a chip, not a whole band */
+.band.k-warn .state,
+.band.k-back .state {
+  padding: 0.14em 0.4em 0.1em;
+  border-radius: 0.12em;
+  font-size: 1.45em;
+  color: var(--ink);
+}
+.band.k-warn .state { background: var(--warning); }
+.band.k-back .state { background: var(--good); }
+
+/* secondary tag: BACK or TIMEOUT beside a stronger state */
+.band .state:not(:empty) + .tag:not(:empty)::before { content: '· '; }
+.band.k-break .tag::before { content: none !important; }
+
+.band.k-break { background: var(--surface-0); }
+.band.k-break .state { color: var(--text-secondary); }
+.band.k-break .tag { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.band.k-pre { background: var(--surface-1); }
+.band.k-pre .state { font-size: 1.3em; color: var(--text-muted); }
+.band.k-pre .tag { font-size: 1.3em; }
+
+.band.k-post { background: var(--surface-1); }
+.band.k-post .clock { margin-left: 0; color: var(--text-secondary); letter-spacing: 0.08em; }
+
+/* red-zone entry: three pulses of the band, then still */
+.tile.rz-enter .band.k-rz { animation: rz-in 0.85s ease-in-out 3; }
+@keyframes rz-in {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.tile.is-rz { box-shadow: inset 0 0 0 0.25em var(--critical); }
+
+/* ---- teams ---- */
+
+.teams {
+  grid-row: 2;
+  container-type: size;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: center;
+  row-gap: 0.15em;
+  padding: 0 0.8em;
+}
+
+/* --r: the team-row unit, from the space the teams block actually has */
+.team {
+  --r: min(44cqh, 14.5cqw);
+  font-size: var(--r);
+  display: grid;
+  grid-template-columns: 0.08em 0.78em auto 0.42em minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.14em;
+  height: 1.06em;
+}
+
+.team .bar { height: 0.78em; border-radius: 0.03em; background: var(--team); }
+.team .logo { width: 0.78em; height: 0.78em; object-fit: contain; }
+
+.team .abbr {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 0.66em;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+/* the football: next to whoever has the ball */
+.team .poss {
+  justify-self: center;
+  width: 0.34em;
+  height: 0.21em;
+  border-radius: 50%;
+  background: #e9dfd0;
+  visibility: hidden;
+}
+.team.has-ball .poss { visibility: visible; }
+
+.team .trace {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.12em;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 0.08em;
+}
+
+.team .score {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1em;
+  font-variant-numeric: tabular-nums;
+  line-height: 0.9;
+  text-align: right;
+  min-width: 1.05em;
+  padding: 0.04em 0.06em 0;
+  border-radius: 0.06em;
+}
+
+.team .score.is-record {
+  font-size: 0.42em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* a fresh score: the digits sit on the scoring team's color for two minutes */
+.team.scored .score { background: color-mix(in srgb, var(--team) 55%, transparent); }
+
+.tile.is-post .team.loser { opacity: 0.4; }
+
+/* ---- trace chips (also used in the recent panel) ---- */
+
+.ev {
+  flex: none;
+  padding: 0.1em 0.3em 0.06em;
+  border-radius: 0.1em;
+  font-family: var(--font-num);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.ev.sc { background: var(--bg); color: var(--fg); }
+.ev.to { background: var(--warning); color: var(--ink); }
+.ev.old { opacity: 0.45; }
+
+.team .ev { font-size: 0.4em; }
+
+.team .age {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 0.3em;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.team .age.old { color: var(--text-muted); }
+
+/* ---- situation ---- */
+
+.sit {
+  grid-row: 3;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  padding: 0 0.42em;
+  height: 1.2em;
+  font-size: 2.15em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sit .dd { font-weight: 700; letter-spacing: 0.02em; }
+.sit .spot { font-weight: 600; color: var(--text-secondary); letter-spacing: 0.02em; }
+.tile.is-pre .sit .dd { font-size: 0.75em; font-weight: 600; color: var(--text-muted); letter-spacing: 0.08em; }
+
+/* ---- field strip: offense always drives left to right ---- */
+
+.field {
+  grid-row: 4;
+  display: grid;
+  grid-template-columns: 5% 1fr 5%;
+  height: 1.3em;
+  margin: 0.35em 0.8em 0.75em;
+  border-radius: 0.2em;
+  overflow: hidden;
+}
+
+.field .ez.own { background: var(--off); opacity: 0.8; }
+.field .ez.opp { background: var(--def); opacity: 0.8; }
+
+.field .turf {
+  position: relative;
+  background:
+    repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), rgba(255, 255, 255, 0.12) calc(10% - 1px) 10%),
+    var(--turf);
+}
+
+.field .rz {
+  position: absolute;
+  inset: 0 0 0 80%;
+  background: rgba(208, 59, 59, 0.12);
+  box-shadow: inset 0.12em 0 0 rgba(208, 59, 59, 0.9);
+}
+.tile.is-rz .field .rz { background: rgba(208, 59, 59, 0.45); }
+
+.field .drive {
+  position: absolute;
+  top: 36%;
+  bottom: 36%;
+  border-radius: 0.1em;
+  background: var(--off);
+}
+
+.field .ltg {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.18em;
+  background: var(--line-to-gain);
+  transform: translateX(-50%);
+}
+
+.field .ball {
+  position: absolute;
+  top: 50%;
+  width: 1.2em;
+  height: 0.78em;
+  border-radius: 50%;
+  background: #e9dfd0;
+  box-shadow: 0 0 0 0.12em var(--surface-1);
+  transform: translate(-50%, -50%);
+}
+
+/* ---- break: the whole tile steps back; only the band stays readable ---- */
+
+.tile .teams, .tile .sit, .tile .field { transition: opacity 0.6s; }
+.tile.is-break .teams,
+.tile.is-break .sit,
+.tile.is-break .field { opacity: 0.33; }
+.tile.is-break { background: #141413; }
+
+.tile.is-post .teams { opacity: 0.8; }
+.tile.is-post .sit, .tile.is-post .field { visibility: hidden; }
+
+/* ---- flash: covers the situation rows; scores stay visible above ---- */
+
+.flash {
+  grid-row: 3 / 5;
+  grid-column: 1;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  margin: 0 0.5em 0.6em;
+  border-radius: 0.3em;
+  background: var(--flash-bg);
+  color: var(--flash-fg);
+  font-family: var(--font-num);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.flash.on { display: flex; animation: flash-in 0.4s ease-out; }
+.flash.on .f-label { animation: flash-blink 0.5s ease-in-out 0.4s 6 alternate; }
+.flash:not([data-kind='TD']).on .f-label { animation-iteration-count: 2; }
+
+.flash .f-label { font-weight: 800; font-size: 2.6em; letter-spacing: 0.04em; line-height: 1; }
+.flash .f-team { font-weight: 700; font-size: 1.7em; letter-spacing: 0.05em; }
+.flash:not([data-kind='TD']) .f-label { font-size: 2.2em; }
+
+@keyframes flash-in {
+  from { opacity: 0; transform: scale(1.04); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes flash-blink {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+
+/* ---- recent panel: lives in a spare slot when there is one ---- */
+
+.recent {
+  container-type: size;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.6em 0.9em;
+  border-radius: 0.8vh;
+  background: #141413;
+  font-family: var(--font-num);
+  overflow: hidden;
+  --u: min(3.2cqw, 6cqh);
+}
+.recent.wide { --u: min(1.6cqw, 6cqh); }
+.recent.wide .ri { font-size: calc(var(--u) * 2.1); }
+
+.recent > * { font-size: var(--u); }
+
+.recent h2 {
+  margin: 0 0 0.5em;
+  font-weight: 700;
+  font-size: calc(var(--u) * 1.3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.recent .rl { display: grid; gap: 0.45em 2.5em; }
+.recent.wide .rl { grid-template-rows: repeat(3, auto); grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+
+.recent .ri {
+  display: grid;
+  grid-template-columns: auto 2.1em auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5em;
+  font-size: calc(var(--u) * 1.7);
+  white-space: nowrap;
+}
+.recent .ri .ev { justify-self: start; font-size: 0.85em; }
+.recent .ri b { font-weight: 700; }
+.recent .ri .rs { color: var(--text-secondary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.recent .ri .rs i { font-style: normal; padding: 0 0.15em; color: var(--text-muted); }
+.recent .ri .ra { color: var(--text-muted); font-weight: 600; font-size: 0.8em; letter-spacing: 0.04em; padding-left: 0.4em; }
+.recent .ri.old b, .recent .ri.old .rs { color: var(--text-muted); }
+
+.recent .none { font-size: calc(var(--u) * 1.4); color: var(--text-muted); }
+.recent:has(.none) { background: transparent; }
+
+/* ---- bottom bar: finals + later on the left, feed state + clock right ---- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 2.2vh;
+  height: 4.2vh;
+  padding: 0 0.6vh;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+
+.rail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 1.8vh;
+  overflow: hidden;
+  font-size: 2.5vh;
+  color: var(--text-secondary);
+}
+
+.rail .rl { font-weight: 700; font-size: 1.9vh; letter-spacing: 0.1em; color: var(--text-muted); }
+.rail .ri { display: inline-flex; gap: 0.6vh; align-items: baseline; }
+.rail .ri b { color: var(--text-primary); font-weight: 700; }
+.rail .ri .lose { color: var(--text-muted); }
+.rail .ri i { font-style: normal; color: var(--text-muted); font-size: 1.9vh; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.feed {
+  display: flex;
+  align-items: center;
+  gap: 0.8vh;
+  font-size: 2.3vh;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.feed::before { content: ''; width: 1.2vh; height: 1.2vh; border-radius: 50%; background: var(--text-muted); }
+.feed.ok::before { background: var(--good); }
+.feed.stale { color: var(--warning); }
+.feed.stale::before { background: var(--warning); }
+.feed.dead { color: var(--critical); font-size: 3vh; }
+.feed.dead::before { background: var(--critical); }
+.feed.sim { color: var(--warning); }
+.feed.sim::before { background: var(--warning); border-radius: 2px; }
+
+.clock {
+  font-size: 2.9vh;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
