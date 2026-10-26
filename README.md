@@ -31,8 +31,7 @@ python3 -m http.server 8083   # open http://localhost:8083/
 npm test                      # Node 22+, no dependencies
 ```
 
-No games on? Replay a past Sunday:
-<http://localhost:8083/?sim=2026-10-18T19:21:30Z>
+
 
 ## How it works
 
@@ -265,10 +264,8 @@ are frames grabbed over the DevTools protocol and stitched with ffmpeg at
 ## Live Sunday Slate Deployment
 
 nova serves a copy of `board/` from `~/redzone` (`redzone.service`, port 8083).
-Its config, and the dashboard tile that opens it, live in the
-[`TrellisLabs/nova`](https://github.com/TrellisLabs/nova) repo. Always deploy
-from this repo. An edit made directly on nova gets overwritten by the next
-deploy.
+Config and service live in the
+[`TrellisLabs/nova`](https://github.com/TrellisLabs/nova) repo.
 
 <details>
 <summary><b>Deploy command</b></summary>
