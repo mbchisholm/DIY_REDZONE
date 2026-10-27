@@ -7,6 +7,14 @@ Live NFL Sunday game-switching project because the YoutubeTV multiview experienc
 
 *Replay of 2026-10-18, 2:26 PM ET, at 4.5× speed: three touchdowns in 90 seconds.*
 
+### Status
+
+- V1 is just a dashboard that I put on a second monitor next to our main TV. It has the live game feeds so we can switch between channels and it tells us which games are close, which just had turnovers, which are on TV break, etc.
+- Channel Director is the skeleton of what will eventually become the logic for controlling the main TV's multiview live during the 1PM and 4:30 slate, hence "DIYREDZONE". It knows what is on advertisement, what games just had big plays, and can priority-rank based on a loose set of rules. not sure how that will evolve.
+- The next step is getting channel director to serve the youtube tv feeds, probably over chromecast otherwise it will require hdmi splitter. another option is developer mode on my google TV and using remotecontrol (which I could run from my laptop instead of the pi3b currently hosting it)
+- Automute is shelved despite being the original idea
+- "headless mode" would be with no dashboard display, just the game-director. This is what the final product will be hopefully. Dashboard is kind of an intermediary for the game-switching logic and a checkpoint for latency on the live feeds. Live feed worked pretty good Sunday 10/25, was even ahead of our main tv at times during the later games. dashboard display itself could run easily on an esp32 its like 4 pieces of JS and a served HTML file.
+
 ### Slate Display
 
 ![Field view at 3:21 PM ET with numbered callouts](docs/img/field-annotated.png)
