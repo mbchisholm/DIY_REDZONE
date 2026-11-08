@@ -14,8 +14,8 @@ import { createBoard } from './board.js';
 import * as field from './field.js';
 import * as grid from './grid.js';
 import * as tv from './tv.js';
-import { createDirector, createQuadDirector } from './director.js';
-import { createDriver } from './roku.js';
+import { createDirector, createQuadDirector, label } from './director.js';
+import { createDriver, report } from './roku.js';
 
 const params = new URLSearchParams(location.search);
 const views = { field, grid };
@@ -53,7 +53,12 @@ async function main() {
           director.step(board, board.now(), driver.quad());
           driver.step(director);
         } else director.step(board, board.now());
-        strip.render(director, board, board.now(), Date.now(), driver && { ...driver.status(), swaps: director.swaps(board, board.now(), driver.quad()) });
+        const drive = driver && { ...driver.status(), swaps: director.swaps(board, board.now(), driver.quad()) };
+        strip.render(director, board, board.now(), Date.now(), drive);
+        if (drive) {
+          const byId = new Map(board.games().map((g) => [g.id, g]));
+          report({ ...drive, busy: undefined, quad: drive.quad.map((id) => (id ? label(byId.get(id)) : '—')), why: director.log().at(-1)?.why ?? '' });
+        }
       }
       document.body.classList.toggle('feed-dead', board.feed().state === 'dead');
     } catch (err) {

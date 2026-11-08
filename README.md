@@ -247,7 +247,11 @@ save again.
 **Sunday routine:** build the quad, then on your phone open
 `http://nova:8083/remote.html`, pick the four games by tile and the tile
 that's highlighted, turn Auto on, Save. Save again (or Auto off) whenever you
-touch the remote yourself.
+touch the remote yourself. The top of that page is what the kiosk last
+reported through `status.json`: AUTO or LOST, the tile it thinks is
+highlighted, its quad (proof the save landed), swap suggestions, and how long
+since the kiosk checked in. Over 40 s means the Redzone tile isn't open on
+nova, so nothing is driving the TV.
 
 The quad director (`createQuadDirector`) moves audio to the hottest quad game
 (held 60 s, or 20 s if its game goes to break) and goes full screen only for

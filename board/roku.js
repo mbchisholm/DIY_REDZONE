@@ -18,6 +18,10 @@
 //   line 3: the tile highlighted now: TL TR BL BR
 // Saving a changed tv.txt resets the tracking, so rewrite it after rebuilding
 // the quad by hand.
+//
+// The kiosk reports back through status.json (report() below), which
+// remote.html shows: what auto mode thinks the TV is doing, and when the kiosk
+// last checked in.
 
 const TILES = ['TL', 'TR', 'BL', 'BR'];
 const KEY_GAP_MS = 700;
@@ -59,6 +63,19 @@ export function parseConfig(text) {
   };
 }
 
+// Post the kiosk's state to status.json when it changes, and at least every
+// 15 s so the phone can tell the kiosk page is still running.
+const BEAT_MS = 15_000;
+let sent = '';
+let sentAt = 0;
+export function report(state) {
+  const body = JSON.stringify(state);
+  if (body === sent && Date.now() - sentAt < BEAT_MS) return;
+  sent = body;
+  sentAt = Date.now();
+  fetch('/status', { method: 'POST', body }).catch(() => {});
+}
+
 export function createDriver() {
   let raw = null;
   let cfg = { mode: 'off', teams: [], tile: 1 };
@@ -66,6 +83,7 @@ export function createDriver() {
   let busy = false;
   let lost = '';
   let lastKeys = '';
+  let movedAt = 0;
   let misses = 0;
   let quad = []; // game ids by tile
 
@@ -105,6 +123,7 @@ export function createDriver() {
     if (!keys.length) return;
     busy = true;
     lastKeys = keys.join(' ');
+    movedAt = Date.now();
     console.log(`[roku] ${TILES[at.tile]}${at.full ? ' full' : ''} -> ${TILES[to.tile]}${to.full ? ' full' : ''}: ${lastKeys}`);
     try {
       for (const k of keys) {
@@ -136,6 +155,6 @@ export function createDriver() {
     step,
     resolve,
     quad: () => quad, // game ids by tile, null where tv.txt names no game
-    status: () => ({ mode: cfg.mode, lost, busy, at: `${TILES[at.tile]}${at.full ? ' FULL' : ''}`, quad, lastKeys }),
+    status: () => ({ mode: cfg.mode, lost, busy, at: `${TILES[at.tile]}${at.full ? ' FULL' : ''}`, quad, lastKeys, movedAt }),
   };
 }

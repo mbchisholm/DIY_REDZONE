@@ -17,17 +17,22 @@
     button.on { background: #1d5a2a; border-color: #3c9; }
     button.save { background: #2a3f6a; font-weight: 700; }
     #msg { min-height: 1.3em; color: #9cf; }
+    #status { padding: 12px; border-radius: 8px; background: #1b1b1b; margin-bottom: 16px; }
+    #status.lost { background: #3a1d1d; }
+    #status.stale { background: #3a321d; }
+    #state { font-size: 24px; font-weight: 800; }
+    #status div { margin-top: 4px; font-size: 14px; color: #bbb; }
   </style>
 </head>
 <body>
   <h1>Redzone Remote</h1>
-  <p>After building the multiview, set its four games and the highlighted tile, then Save. Auto off stops all presses.</p>
+  <div id="status"><span id="state">…</span><div id="why"></div><div id="quad"></div><div id="seen"></div></div>
+  <p>After building the multiview, set its four games and the highlighted tile, then Save. Auto off stops all presses. Re-save after using the TV remote yourself.</p>
   <div class="grid" id="tiles"></div>
   <label>Highlighted tile now</label>
   <div class="row"><select id="hl"><option>TL</option><option>TR</option><option>BL</option><option>BR</option></select></div>
   <div class="row"><button id="mode">Auto: off</button><button class="save" id="save">Save</button></div>
   <div id="msg"></div>
-  <p id="tv"></p>
   <script type="module">
     import { SCOREBOARD_URL, normalizeScoreboard } from './feed.js';
     import { parseConfig } from './roku.js';
@@ -37,10 +42,11 @@
     let mode = 'off';
 
     const [sb, txt] = await Promise.all([
-      fetch(SCOREBOARD_URL, { cache: 'no-store' }).then((r) => r.json()),
+      fetch(SCOREBOARD_URL, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       fetch('tv.txt', { cache: 'no-store' }).then((r) => r.text()).catch(() => ''),
     ]);
-    const games = normalizeScoreboard(sb).filter((g) => g.state !== 'post').sort((a, b) => a.kickoff - b.kickoff);
+    if (!sb) $('msg').textContent = 'ESPN unreachable: no game list. Auto on/off still saves.';
+    const games = sb ? normalizeScoreboard(sb).filter((g) => g.state !== 'post').sort((a, b) => a.kickoff - b.kickoff) : [];
     const cfg = parseConfig(txt);
     const opts = ['<option value="">—</option>',
       ...games.map((g) => `<option value="${g.home.abbr}">${g.away.abbr} @ ${g.home.abbr}${g.state === 'in' ? '' : ' (pre)'}</option>`)].join('');
@@ -60,12 +66,27 @@
       const teams = TILES.map((t) => $(`t${t}`).value || '-');
       const body = `# Auto mode (roku.js). Line 1: auto | off\n${mode}\n# top-left top-right bottom-left bottom-right\n${teams.join(' ')}\n# Tile highlighted now\n${$('hl').value}\n`;
       const r = await fetch('/tv', { method: 'POST', body });
-      $('msg').textContent = r.ok ? `Saved ${new Date().toLocaleTimeString()}. The board picks it up within 10 s.` : `Save failed: ${r.status}`;
+      $('msg').textContent = r.ok ? `Saved ${new Date().toLocaleTimeString()}. The kiosk's quad above updates within 10 s.` : `Save failed: ${r.status}`;
     };
 
+    // What the kiosk last reported (roku.js report()), and the Roku's own player state.
     const poll = async () => {
-      const xml = await fetch('/roku/query/media-player', { cache: 'no-store' }).then((r) => r.text()).catch(() => '');
-      $('tv').textContent = `Roku player: ${xml.match(/state="(\w+)"/)?.[1] ?? 'unreachable'}`;
+      const [st, xml] = await Promise.all([
+        // Age from the server's own clock (Date - Last-Modified), not the phone's.
+        fetch('status.json', { cache: 'no-store' }).then(async (r) => (r.ok
+          ? { ...(await r.json()), age: Math.round((Date.parse(r.headers.get('Date')) - Date.parse(r.headers.get('Last-Modified'))) / 1000) }
+          : null)).catch(() => null),
+        fetch('/roku/query/media-player', { cache: 'no-store' }).then((r) => r.text()).catch(() => ''),
+      ]);
+      const player = xml.match(/state="(\w+)"/)?.[1] ?? 'unreachable';
+      const age = st?.age ?? null;
+      const stale = age == null || age > 40;
+      $('status').className = st?.lost ? 'lost' : stale ? 'stale' : '';
+      $('state').textContent = !st ? 'Kiosk never reported' : st.lost ? 'TV LOST' : st.mode === 'auto' ? `AUTO · ${st.at}` : 'AUTO OFF';
+      $('why').textContent = st?.lost ? `${st.lost}. Fix the TV, then Save.` : [st?.why, ...(st?.swaps ?? []).map((x) => `REBUILD? ${x}`)].filter(Boolean).join(' · ');
+      $('quad').textContent = st ? `Kiosk's quad: ${st.quad.map((q, i) => `${TILES[i]} ${q}`).join('  ')}` : '';
+      const moved = st?.movedAt ? `, last move ${st.lastKeys} ${Math.round((Date.now() - st.movedAt) / 60000)} min ago` : '';
+      $('seen').textContent = `${stale ? 'Redzone tile not running on nova? ' : ''}Kiosk seen ${age ?? '—'} s ago${moved} · Roku ${player}`;
     };
     poll();
     setInterval(poll, 5000);
