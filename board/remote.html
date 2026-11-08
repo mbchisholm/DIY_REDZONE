@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redzone Remote</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 16px; background: #111; color: #eee; font: 17px/1.3 system-ui, sans-serif; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    p { margin: 0 0 16px; color: #aaa; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    label { display: block; font-size: 13px; color: #aaa; }
+    select, button { width: 100%; padding: 12px; font: inherit; border-radius: 8px; border: 1px solid #444; background: #222; color: #eee; }
+    .row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .row > * { flex: 1; }
+    button.on { background: #1d5a2a; border-color: #3c9; }
+    button.save { background: #2a3f6a; font-weight: 700; }
+    #msg { min-height: 1.3em; color: #9cf; }
+  </style>
+</head>
+<body>
+  <h1>Redzone Remote</h1>
+  <p>After building the multiview, set its four games and the highlighted tile, then Save. Auto off stops all presses.</p>
+  <div class="grid" id="tiles"></div>
+  <label>Highlighted tile now</label>
+  <div class="row"><select id="hl"><option>TL</option><option>TR</option><option>BL</option><option>BR</option></select></div>
+  <div class="row"><button id="mode">Auto: off</button><button class="save" id="save">Save</button></div>
+  <div id="msg"></div>
+  <p id="tv"></p>
+  <script type="module">
+    import { SCOREBOARD_URL, normalizeScoreboard } from './feed.js';
+    import { parseConfig } from './roku.js';
+
+    const TILES = ['TL', 'TR', 'BL', 'BR'];
+    const $ = (id) => document.getElementById(id);
+    let mode = 'off';
+
+    const [sb, txt] = await Promise.all([
+      fetch(SCOREBOARD_URL, { cache: 'no-store' }).then((r) => r.json()),
+      fetch('tv.txt', { cache: 'no-store' }).then((r) => r.text()).catch(() => ''),
+    ]);
+    const games = normalizeScoreboard(sb).filter((g) => g.state !== 'post').sort((a, b) => a.kickoff - b.kickoff);
+    const cfg = parseConfig(txt);
+    const opts = ['<option value="">—</option>',
+      ...games.map((g) => `<option value="${g.home.abbr}">${g.away.abbr} @ ${g.home.abbr}${g.state === 'in' ? '' : ' (pre)'}</option>`)].join('');
+    $('tiles').innerHTML = TILES.map((t) => `<div><label>${t}</label><select id="t${t}">${opts}</select></div>`).join('');
+    TILES.forEach((t, i) => {
+      const abbr = cfg.teams[i];
+      const g = games.find((g) => g.home.abbr === abbr || g.away.abbr === abbr);
+      if (g) $(`t${t}`).value = g.home.abbr;
+    });
+    $('hl').value = TILES[cfg.tile];
+    const showMode = () => { $('mode').textContent = `Auto: ${mode}`; $('mode').classList.toggle('on', mode === 'auto'); };
+    mode = cfg.mode;
+    showMode();
+    $('mode').onclick = () => { mode = mode === 'auto' ? 'off' : 'auto'; showMode(); };
+
+    $('save').onclick = async () => {
+      const teams = TILES.map((t) => $(`t${t}`).value || '-');
+      const body = `# Auto mode (roku.js). Line 1: auto | off\n${mode}\n# top-left top-right bottom-left bottom-right\n${teams.join(' ')}\n# Tile highlighted now\n${$('hl').value}\n`;
+      const r = await fetch('/tv', { method: 'POST', body });
+      $('msg').textContent = r.ok ? `Saved ${new Date().toLocaleTimeString()}. The board picks it up within 10 s.` : `Save failed: ${r.status}`;
+    };
+
+    const poll = async () => {
+      const xml = await fetch('/roku/query/media-player', { cache: 'no-store' }).then((r) => r.text()).catch(() => '');
+      $('tv').textContent = `Roku player: ${xml.match(/state="(\w+)"/)?.[1] ?? 'unreachable'}`;
+    };
+    poll();
+    setInterval(poll, 5000);
+  </script>
+</body>
+</html>

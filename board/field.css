@@ -600,6 +600,9 @@ body {
   transition: background 0.4s;
 }
 
+/* Auto mode stopped pressing: the TV isn't where it thinks. */
+.tv.lost { background: #3a1d1d; box-shadow: inset 0 0 0 calc(var(--wx) * 3) var(--critical); }
+
 /* Just switched: change the channel. */
 .tv.cue { background: #33331f; box-shadow: inset 0 0 0 calc(var(--wx) * 3) var(--line-to-gain); }
 
@@ -640,6 +643,7 @@ body {
 .slot.rz { box-shadow: inset 0 0 0 calc(var(--wx) * 3) var(--critical); }
 .slot.brk { background: repeating-linear-gradient(135deg, #2a2a27 0 6px, #1f1f1d 6px 12px); color: var(--text-muted); }
 .slot.empty { background: #111; }
+.slot.audio::before { content: '🔊'; font-size: 0.8em; }
 
 .tv-why {
   margin: 0;

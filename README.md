@@ -20,8 +20,8 @@ Live NFL Sunday game-switching project because the YoutubeTV multiview experienc
 7. **Schedule rail:** finals and games still to come.
 
 - **Running** on the `nova` wall display at `http://nova:8083/`.
-- **Channel director** recommends one game full screen, a split, or a quad. The channel still changes by hand.
-- **Next Sunday (2026-11-01):** first try at having those picks set the TV's panels directly.
+- **Channel director** recommends one game full screen, a split, or a quad.
+- **Auto mode** (first run 2026-11-08) drives YouTube TV on a Roku inside a 4-game multiview you build by hand: audio follows the action, one game goes full screen when it owns the moment.
 
 ## Quick start
 
@@ -224,6 +224,51 @@ red-zone and close-and-late coverage. `--dwell`, `--urgent` and `--settle`
 
 </details>
 
+## Auto mode
+
+`?director=1&drive=1` swaps the mock director for one that drives the TV.
+YouTube TV's multiview builder only lists what's live, in an order that
+shifts, and the Roku can't report what's on screen, so **building the quad
+stays manual**. Inside a built quad every move is short and fixed:
+
+| Where | Key | Result (Roku Streaming Stick, YouTube TV 2.26.77) |
+|---|---|---|
+| quad | arrow toward a neighbour tile | highlight and audio move, instantly |
+| quad | arrow toward an edge | overlay menu (never sent) |
+| quad | Back | exits to the YouTube TV home page (never sent) |
+| quad | Select | that tile full screen, ~2 s |
+| full | Back | back to the quad, ~3 s |
+
+Nothing reports which tile is highlighted, so `roku.js` counts presses from
+the tile you say it starts on. After each move it checks the Roku's player
+state; anything but `play` turns the strip red and stops all presses until you
+save again.
+
+**Sunday routine:** build the quad, then on your phone open
+`http://nova:8083/remote.html`, pick the four games by tile and the tile
+that's highlighted, turn Auto on, Save. Save again (or Auto off) whenever you
+touch the remote yourself.
+
+The quad director (`createQuadDirector`) moves audio to the hottest quad game
+(held 60 s, or 20 s if its game goes to break) and goes full screen only for
+heat 6.5+ with no rival: goal to go, red zone on 4th down, or the last two
+minutes of a close game. It leaves full screen at a commercial, after 20 s if
+another quad game turns key, or 45 s after its game cools off. It never goes
+full screen while another quad game's score is fresh. The strip suggests
+quad swaps when a game is final or decided.
+
+On the 2026-10-18 1pm window, over three different quads: about 23 moves an
+hour (most are audio moves), 13–15 full-screen visits, 22–30 min of 205 full
+screen, and 88–94% of quad touchdowns on screen; the rest were long touchdowns
+while another game was full screen.
+
+`serve.py` replaces `python3 -m http.server` on nova: it serves the board,
+relays `/roku/...` to the Roku (ECP sends no CORS headers), and saves
+`tv.txt` from the remote page. The Roku needs Settings > System > Advanced
+system settings > Control by mobile apps set to Permissive.
+`tvremote/roku.py` sends single keys from a laptop, which is how the table
+above was mapped.
+
 ## Replay and URL parameters
 
 <details>
@@ -238,6 +283,7 @@ red-zone and close-and-late coverage. `--dwell`, `--urgent` and `--settle`
 | `saved=/espn` | Sim from saved ESPN responses (`sb_<YYYYMMDD>.json`, `sum_<id>.json`). ESPN blocks headless browsers. |
 | `fill=9` | Test aid: clone live games until nine are live. |
 | `director=1` | Show the channel director strip (field view only). |
+| `drive=1` | With `director=1`: auto mode, drives the Roku. Only nova's kiosk tile sets this. |
 
 </details>
 
@@ -264,7 +310,8 @@ are frames grabbed over the DevTools protocol and stitched with ffmpeg at
 
 ## Live Sunday Slate Deployment
 
-nova serves a copy of `board/` from `~/redzone` (`redzone.service`, port 8083).
+nova serves a copy of `board/` from `~/redzone` (`redzone.service`, port 8083,
+running `serve.py`). A deploy resets `tv.txt` to Auto off.
 Its config, and the dashboard tile that opens it, live in the
 [`TrellisLabs/nova`](https://github.com/TrellisLabs/nova) repo. Always deploy
 from this repo. An edit made directly on nova gets overwritten by the next
@@ -286,7 +333,7 @@ COPYFILE_DISABLE=1 tar czf - --exclude=test --exclude=node_modules board | ssh m
 ## Not built yet
 
 - Player watchlist: a hand-written list, highlighted in play text.
-- Channel switching on the main TV from the director's picks.
+- Building the multiview automatically (the Roku can't read the builder).
 - Delaying spoilers only for the game on the TV, which needs to know what's on it.
 
 ## Repo structure

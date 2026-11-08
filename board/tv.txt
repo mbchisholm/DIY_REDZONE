@@ -1,0 +1,6 @@
+# Auto mode (roku.js). Line 1: auto | off
+off
+# One team per quad game: top-left top-right bottom-left bottom-right
+CIN
+# Tile highlighted now: TL TR BL BR
+TR
