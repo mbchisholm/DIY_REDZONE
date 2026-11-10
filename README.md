@@ -21,7 +21,7 @@ Live NFL Sunday game-switching project because the YoutubeTV multiview experienc
 
 - **Running** on the `nova` wall display at `http://nova:8083/`.
 - **Channel director** recommends one game full screen, a split, or a quad.
-- **Auto mode** (first run 2026-11-08) drives YouTube TV on a Roku inside a 4-game multiview you build by hand: audio follows the action, one game goes full screen when it owns the moment.
+- **Roku Remote Script** can use the director feed to switch around a 4-game multiview. For now you have to set the multiview manually. Trying to get real scripting on my google tv but it keeps booting back into non-developer mode.
 
 ## Quick start
 
