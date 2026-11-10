@@ -25,7 +25,7 @@ export function mount(root) {
   let seen = 0;
   let cueUntil = 0;
 
-  function render(director, b, t, real) {
+  function render(director, b, t, real, drive = null) {
     const cur = director.current();
     const log = director.log();
     const last = log.at(-1);
@@ -39,12 +39,19 @@ export function mount(root) {
     setText(q('.tv-layout'), LAYOUT[cur.n] ?? '—');
     setText(q('.tv-held'), cur.n ? fmtClock(t - cur.since) : '');
     setText(q('.tv-why'), last?.why ?? 'Waiting for a live game');
+    if (drive) {
+      setText(q('.tv-tag'), drive.mode === 'auto' ? `AUTO · ${drive.at}${drive.busy ? ' · MOVING' : ''}` : 'AUTO OFF');
+      el.classList.toggle('lost', Boolean(drive.lost));
+      if (drive.mode === 'auto' && !drive.quad.some(Boolean)) setText(q('.tv-why'), 'tv.txt names no quad games yet');
+      if (drive.lost) setText(q('.tv-why'), `TV LOST: ${drive.lost}. Fix the TV, then rewrite tv.txt`);
+      else if (drive.swaps.length) setText(q('.tv-why'), `${last?.why ?? ''} · REBUILD? ${drive.swaps.join(', ')}`);
+    }
 
     const byId = new Map(b.games().map((g) => [g.id, g]));
     const slots = cur.n ? Array.from({ length: cur.n }, (_, i) => byId.get(cur.ids[i])) : [];
     const screen = q('.tv-screen');
     screen.dataset.n = String(cur.n);
-    setHTML(screen, slots.map(slotHTML).join(''));
+    setHTML(screen, slots.map((g) => slotHTML(g, cur.n > 1 && g?.id === cur.audio)).join(''));
 
     setHTML(
       q('.tv-log'),
@@ -60,10 +67,10 @@ export function mount(root) {
   return { render };
 }
 
-function slotHTML(g) {
+function slotHTML(g, audio = false) {
   if (!g) return '<div class="slot empty"></div>';
   const off = g.situation?.offense;
-  const cls = ['slot', showsRedZone(g) ? 'rz' : '', breakKind(g) ? 'brk' : ''].join(' ');
+  const cls = ['slot', showsRedZone(g) ? 'rz' : '', breakKind(g) ? 'brk' : '', audio ? 'audio' : ''].join(' ');
   const team = (side) =>
     `<span class="${off === side ? 'has-ball' : ''}" style="--team:${markColor(g[side])}">${esc(g[side].abbr)} ${g[side].score ?? 0}</span>`;
   return `<div class="${cls}" title="${esc(label(g))}">${team('away')}${team('home')}</div>`;

@@ -8,12 +8,14 @@
 //   &saved=/espn               sim from saved ESPN responses instead (see sim.js)
 //   ?fill=9                    test aid: clone live games until nine are live
 //   ?director=1                mock RedZone: a strip showing what the TV would show (field view)
+//   &drive=1                   auto mode: drive the Roku from the director (roku.js; needs serve.py)
 
 import { createBoard } from './board.js';
 import * as field from './field.js';
 import * as grid from './grid.js';
 import * as tv from './tv.js';
-import { createDirector } from './director.js';
+import { createDirector, createQuadDirector, label } from './director.js';
+import { createDriver, report } from './roku.js';
 
 const params = new URLSearchParams(location.search);
 const views = { field, grid };
@@ -34,7 +36,8 @@ async function main() {
     css.onload = css.onerror = resolve;
     document.head.append(css);
   });
-  const director = params.has('director') && name === 'field' ? createDirector() : null;
+  const driver = params.has('director') && params.has('drive') && !params.has('sim') ? createDriver() : null;
+  const director = params.has('director') && name === 'field' ? (driver ? createQuadDirector() : createDirector()) : null;
   if (director) document.documentElement.classList.add('with-tv');
   const view = views[name].mount(document.body);
   const strip = director && tv.mount(document.body);
@@ -45,8 +48,17 @@ async function main() {
       board.step();
       view.render(board, board.now(), Date.now());
       if (director) {
-        director.step(board, board.now());
-        strip.render(director, board, board.now(), Date.now());
+        if (driver) {
+          driver.resolve(board.games());
+          director.step(board, board.now(), driver.quad());
+          driver.step(director);
+        } else director.step(board, board.now());
+        const drive = driver && { ...driver.status(), swaps: director.swaps(board, board.now(), driver.quad()) };
+        strip.render(director, board, board.now(), Date.now(), drive);
+        if (drive) {
+          const byId = new Map(board.games().map((g) => [g.id, g]));
+          report({ ...drive, busy: undefined, quad: drive.quad.map((id) => (id ? label(byId.get(id)) : '—')), why: director.log().at(-1)?.why ?? '' });
+        }
       }
       document.body.classList.toggle('feed-dead', board.feed().state === 'dead');
     } catch (err) {

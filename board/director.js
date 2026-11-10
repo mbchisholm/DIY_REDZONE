@@ -159,3 +159,102 @@ function offWhy(g) {
   if (g.state === 'post') return 'FINAL';
   return breakKind(g) ? 'TV BREAK' : '';
 }
+
+// ---- Auto mode: a fixed quad ----
+//
+// With auto mode the TV runs a 4-game multiview someone built by hand, so the
+// only moves are which tile has the audio and whether one tile is full
+// screen. Measured on the Roku (2026-11-08): an audio move is one press and
+// instant; going full screen or back restarts the player, 2-3 s. So audio
+// follows the action closely, and full screen is kept for one game that
+// clearly owns the moment and dropped as soon as it goes to commercial.
+const AUDIO_HOLD_MS = 60_000; // audio stays put this long, unless its game leaves (break, final)
+const AUDIO_SETTLE_MS = 10_000; // a challenger must stay ahead this long
+const FULL_GAP_MS = 90_000; // between full-screen changes, except leaving for a break or a rival
+const RIVAL_GAP_MS = 20_000; // full screen yields this soon when another quad game turns key
+const FULL_HEAT = 6.5; // heat for full screen: goal to go, red zone on 4th down, the last 2 min of a close game
+const FULL_MARGIN = 2; // heat a full-screen game needs over the next-best quad game
+const AUDIO_MIN_MS = 20_000; // even when its game goes to break, audio moves no faster than this
+const FULL_FADE_MS = 45_000; // full screen ends once its game has stopped being key this long
+
+// The current layout is { n: 1 | 4, ids, audio, since }: n 1 is `audio` full
+// screen, n 4 is the quad (ids in tile order) with audio on `audio`.
+export function createQuadDirector({ logMax = 200 } = {}) {
+  let cur = { n: 0, ids: [], audio: null, since: -Infinity };
+  let audioAt = -Infinity;
+  let fullAt = -Infinity;
+  let coolSince = null;
+  let pending = null; // { id, since }: a challenger for the audio
+  const log = [];
+
+  function step(b, t, quad) {
+    const byId = new Map(b.games().map((g) => [g.id, g]));
+    const isKey = (x) => x.heat >= HOT || (closeAndLate(x.g) && competitiveness(x.g) >= DECIDED);
+    const live = quad
+      .map((id) => byId.get(id))
+      .filter((g) => g?.state === 'in')
+      .map((g) => ({ g, ...heatOf(g, b, t) }))
+      .filter((x) => x.heat > 0)
+      .sort((x, y) => y.heat - x.heat || x.g.kickoff - y.g.kickoff);
+    const full = cur.n === 1;
+    const mine = live.find((x) => x.g.id === cur.audio);
+    const top = live[0];
+    const set = (n, x, why) => {
+      if (n === 1 || full) fullAt = t;
+      if (x.g.id !== cur.audio) audioAt = t;
+      cur = { n, ids: n === 1 ? [x.g.id] : [...quad], audio: x.g.id, since: t };
+      coolSince = null;
+      pending = null;
+      log.push({ at: t, n, ids: cur.ids, audio: cur.audio, why: `${n === 1 ? 'FULL' : 'QUAD'} ${why}` });
+      if (log.length > logMax) log.shift();
+    };
+    if (!top) return cur; // every quad game in break or over: nothing better to show
+
+    const keys = live.filter(isKey);
+    // Not while another quad game has a fresh score or turnover: its replay is coming.
+    const fresh = (g) => { const ev = b.hist(g)?.events.at(-1); return ev && t - ev.at < RECENT_MS; };
+    const dominant = top.heat >= FULL_HEAT && keys.length === 1 && top.heat - (live[1]?.heat ?? 0) >= FULL_MARGIN
+      && !quad.some((id) => id && id !== top.g.id && byId.get(id) && fresh(byId.get(id)));
+    const say = (x) => `${label(x.g)} ${x.why}`;
+
+    if (full) {
+      if (!mine) return set(4, top, `🔊 ${say(top)} − ${label(byId.get(cur.audio))} ${offWhy(byId.get(cur.audio)) || 'TV BREAK'}`);
+      const rival = keys.find((x) => x !== mine);
+      if (rival && t - fullAt >= RIVAL_GAP_MS) {
+        const [a, c] = mine.heat >= rival.heat ? [mine, rival] : [rival, mine];
+        return set(4, a, `🔊 ${say(a)}, + ${say(c)}`);
+      }
+      if (isKey(mine)) coolSince = null;
+      else coolSince ??= t;
+      if (coolSince != null && t - coolSince >= FULL_FADE_MS && t - fullAt >= FULL_GAP_MS) return set(4, mine, `🔊 ${say(mine)}, cooled off`);
+      return cur;
+    }
+    if (dominant && t - fullAt >= FULL_GAP_MS) return set(1, top, say(top));
+    if (!cur.n || (!mine && t - audioAt >= AUDIO_MIN_MS)) return set(4, top, `🔊 ${say(top)}`);
+    if (!mine) return cur;
+    if (top === mine || top.heat <= mine.heat + INCUMBENT) {
+      pending = null;
+      return cur;
+    }
+    if (pending?.id !== top.g.id) pending = { id: top.g.id, since: t };
+    if (t - pending.since >= AUDIO_SETTLE_MS && t - audioAt >= AUDIO_HOLD_MS) return set(4, top, `🔊 ${say(top)}`);
+    return cur;
+  }
+
+  // Swaps worth rebuilding the quad for: a quad slot that's empty, final or
+  // decided, against the best live, competitive game outside the quad.
+  function swaps(b, t, quad) {
+    const games = b.games();
+    const inQuad = new Set(quad.filter(Boolean));
+    const dead = quad
+      .map((id) => games.find((g) => g.id === id))
+      .filter((g) => !g || g.state === 'post' || (g.state === 'in' && g.period >= 3 && competitiveness(g) < DECIDED));
+    const out = games
+      .filter((g) => !inQuad.has(g.id) && (g.state === 'in' ? competitiveness(g) >= DECIDED : g.state === 'pre' && g.kickoff - t < 10 * 60_000))
+      .map((g) => ({ g, score: g.state === 'in' ? heatOf(g, b, t).heat + competitiveness(g) : 0 }))
+      .sort((x, y) => y.score - x.score);
+    return dead.slice(0, out.length).map((g, i) => `−${g ? `${label(g)} ${g.state === 'post' ? 'FINAL' : 'DECIDED'}` : 'empty'} +${label(out[i].g)}`);
+  }
+
+  return { step, swaps, current: () => cur, log: () => log };
+}
