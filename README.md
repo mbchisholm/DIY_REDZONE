@@ -7,6 +7,14 @@ Live NFL Sunday game-switching project because the YoutubeTV multiview experienc
 
 *Replay of 2026-10-18, 2:26 PM ET, at 4.5× speed: three touchdowns in 90 seconds.*
 
+### Status
+
+- V1 is just a dashboard that I put on a second monitor next to our main TV. It has the live game feeds so we can switch between channels and it tells us which games are close, which just had turnovers, which are on TV break, etc.
+- Channel Director is the skeleton of what will eventually become the logic for controlling the main TV's multiview live during the 1PM and 4:30 slate, hence "DIYREDZONE". It knows what is on advertisement, what games just had big plays, and can priority-rank based on a loose set of rules. not sure how that will evolve.
+- The next step is getting channel director to serve the youtube tv feeds, probably over chromecast otherwise it will require hdmi splitter. another option is developer mode on my google TV and using remotecontrol (which I could run from my laptop instead of the pi3b currently hosting it)
+- Automute is shelved despite being the original idea
+- "headless mode" would be with no dashboard display, just the game-director. This is what the final product will be hopefully. Dashboard is kind of an intermediary for the game-switching logic and a checkpoint for latency on the live feeds. Live feed worked pretty good Sunday 10/25, was even ahead of our main tv at times during the later games. dashboard display itself could run easily on an esp32 its like 4 pieces of JS and a served HTML file.
+
 ### Slate Display
 
 ![Field view at 3:21 PM ET with numbered callouts](docs/img/field-annotated.png)
@@ -31,8 +39,7 @@ python3 -m http.server 8083   # open http://localhost:8083/
 npm test                      # Node 22+, no dependencies
 ```
 
-No games on? Replay a past Sunday:
-<http://localhost:8083/?sim=2026-10-18T19:21:30Z>
+
 
 ## How it works
 
@@ -314,12 +321,9 @@ are frames grabbed over the DevTools protocol and stitched with ffmpeg at
 
 ## Live Sunday Slate Deployment
 
-nova serves a copy of `board/` from `~/redzone` (`redzone.service`, port 8083,
-running `serve.py`). A deploy resets `tv.txt` to Auto off.
-Its config, and the dashboard tile that opens it, live in the
-[`TrellisLabs/nova`](https://github.com/TrellisLabs/nova) repo. Always deploy
-from this repo. An edit made directly on nova gets overwritten by the next
-deploy.
+nova serves a copy of `board/` from `~/redzone` (`redzone.service`, port 8083).
+Config and service live in the
+[`TrellisLabs/nova`](https://github.com/TrellisLabs/nova) repo.
 
 <details>
 <summary><b>Deploy command</b></summary>
