@@ -323,7 +323,7 @@ are frames grabbed over the DevTools protocol and stitched with ffmpeg at
 
 nova serves a copy of `board/` from `~/redzone` (`redzone.service`, port 8083).
 Config and service live in the
-[`TrellisLabs/nova`](https://github.com/TrellisLabs/nova) repo.
+[`nova/`](https://github.com/mbchisholm/BOTS/tree/main/nova) folder of BOTS.
 
 <details>
 <summary><b>Deploy command</b></summary>
